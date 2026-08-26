@@ -24,6 +24,7 @@ model QualityCase {
   batchOrderReference   String?
   additionalContextNote String?
   evidence              Evidence[]
+  contributingCauses    ContributingCause[]
   createdAt             DateTime          @default(now())
   updatedAt             DateTime          @updatedAt
 
@@ -31,12 +32,35 @@ model QualityCase {
 }
 
 model Evidence {
-  id        String      @id @default(cuid())
+  id            String              @id @default(cuid())
   qualityCaseId String
-  content   String
-  createdAt DateTime    @default(now())
-  updatedAt DateTime    @updatedAt
-  qualityCase QualityCase @relation(fields: [qualityCaseId], references: [id], onDelete: Cascade)
+  content       String
+  createdAt     DateTime            @default(now())
+  updatedAt     DateTime            @updatedAt
+  qualityCase   QualityCase         @relation(fields: [qualityCaseId], references: [id], onDelete: Cascade)
+  causeLinks    EvidenceCauseLink[]
 
   @@index([qualityCaseId, createdAt])
+}
+
+model ContributingCause {
+  id            String              @id @default(cuid())
+  qualityCaseId String
+  content       String
+  createdAt     DateTime            @default(now())
+  updatedAt     DateTime            @updatedAt
+  qualityCase   QualityCase         @relation(fields: [qualityCaseId], references: [id], onDelete: Cascade)
+  evidenceLinks EvidenceCauseLink[]
+
+  @@index([qualityCaseId, createdAt])
+}
+
+model EvidenceCauseLink {
+  evidenceId          String
+  contributingCauseId String
+  evidence            Evidence          @relation(fields: [evidenceId], references: [id], onDelete: Cascade)
+  contributingCause   ContributingCause @relation(fields: [contributingCauseId], references: [id], onDelete: Cascade)
+
+  @@id([evidenceId, contributingCauseId])
+  @@index([contributingCauseId])
 }

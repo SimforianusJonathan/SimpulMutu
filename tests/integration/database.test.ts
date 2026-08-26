@@ -102,3 +102,178 @@ describe("Bukti pada case nonaktif", () => {
     await expect(removeEvidence(created.id, evidence.id)).rejects.toBeInstanceOf(Error);
   });
 });
+
+describe("persistensi Faktor Penyebab dan hubungan Bukti", () => {
+  it("menyimpan many-to-many, unlink, dan membersihkan link saat Bukti/Faktor dihapus", async () => {
+    const {
+      addContributingCause,
+      addEvidence,
+      removeContributingCause,
+      removeEvidence,
+      updateContributingCause,
+    } = await import("../../src/lib/quality-case/service");
+    const created = await createQualityCase({
+      problem: "Jahitan loncat pada sisi samping",
+    });
+    createdIds.push(created.id);
+
+    const firstEvidence = await addEvidence(
+      created.id,
+      "Defect terkonsentrasi pada mesin M-04",
+    );
+    const secondEvidence = await addEvidence(
+      created.id,
+      "Jarum terlihat aus saat pemeriksaan",
+    );
+    const firstCause = await addContributingCause(
+      created.id,
+      "Kondisi mesin lokal mungkin berkontribusi",
+      [firstEvidence.id, secondEvidence.id],
+    );
+    const secondCause = await addContributingCause(
+      created.id,
+      "Kondisi jarum mungkin berkontribusi",
+      [secondEvidence.id],
+    );
+
+    let reloaded = await getActiveQualityCase(created.id);
+    expect(reloaded?.contributingCauses).toHaveLength(2);
+    expect(
+      reloaded?.contributingCauses.find((cause) => cause.id === firstCause.id)
+        ?.evidenceLinks,
+    ).toEqual(
+      expect.arrayContaining([
+        { evidenceId: firstEvidence.id },
+        { evidenceId: secondEvidence.id },
+      ]),
+    );
+    expect(
+      reloaded?.evidence.find((item) => item.id === secondEvidence.id)
+        ?.causeLinks,
+    ).toEqual(
+      expect.arrayContaining([
+        { contributingCauseId: firstCause.id },
+        { contributingCauseId: secondCause.id },
+      ]),
+    );
+
+    await updateContributingCause(
+      created.id,
+      firstCause.id,
+      "Kondisi mesin lokal perlu diperiksa",
+      [firstEvidence.id],
+    );
+    expect(
+      await getPrisma().evidenceCauseLink.findUnique({
+        where: {
+          evidenceId_contributingCauseId: {
+            evidenceId: secondEvidence.id,
+            contributingCauseId: firstCause.id,
+          },
+        },
+      }),
+    ).toBeNull();
+
+    await removeEvidence(created.id, secondEvidence.id);
+    expect(
+      await getPrisma().evidenceCauseLink.count({
+        where: { evidenceId: secondEvidence.id },
+      }),
+    ).toBe(0);
+    reloaded = await getActiveQualityCase(created.id);
+    expect(reloaded?.evidence).toHaveLength(1);
+    expect(
+      reloaded?.contributingCauses.find((cause) => cause.id === secondCause.id)
+        ?.evidenceLinks,
+    ).toEqual([]);
+
+    await removeContributingCause(created.id, firstCause.id);
+    expect(
+      await getPrisma().evidenceCauseLink.count({
+        where: { contributingCauseId: firstCause.id },
+      }),
+    ).toBe(0);
+    await expect(getActiveQualityCase(created.id)).resolves.toMatchObject({
+      problem: "Jahitan loncat pada sisi samping",
+      status: "INVESTIGATING",
+    });
+  });
+
+  it("menolak mutation Faktor Penyebab ketika case tidak aktif", async () => {
+    const {
+      addContributingCause,
+      addEvidence,
+      removeContributingCause,
+      updateContributingCause,
+    } = await import("../../src/lib/quality-case/service");
+    const created = await createQualityCase({ problem: "Case selesai" });
+    createdIds.push(created.id);
+    const evidence = await addEvidence(created.id, "Bukti awal");
+    const cause = await addContributingCause(
+      created.id,
+      "Faktor awal",
+      [evidence.id],
+    );
+
+    await getPrisma().qualityCase.update({
+      where: { id: created.id },
+      data: { status: "RESOLVED" },
+    });
+
+    await expect(
+      addContributingCause(created.id, "Faktor lain", [evidence.id]),
+    ).rejects.toBeInstanceOf(Error);
+    await expect(
+      updateContributingCause(created.id, cause.id, "Ubah", [evidence.id]),
+    ).rejects.toBeInstanceOf(Error);
+    await expect(
+      removeContributingCause(created.id, cause.id),
+    ).rejects.toBeInstanceOf(Error);
+  });
+
+  it("menolak hubungan Bukti dari Kasus Kualitas lain", async () => {
+    const {
+      addContributingCause,
+      addEvidence,
+      InvalidEvidenceSelectionError,
+      updateContributingCause,
+    } = await import("../../src/lib/quality-case/service");
+    const firstCase = await createQualityCase({ problem: "Masalah pertama" });
+    const secondCase = await createQualityCase({ problem: "Masalah kedua" });
+    createdIds.push(firstCase.id, secondCase.id);
+    const foreignEvidence = await addEvidence(
+      secondCase.id,
+      "Bukti milik kasus kedua",
+    );
+    const cause = await addContributingCause(
+      firstCase.id,
+      "Faktor pada kasus pertama",
+      [],
+    );
+
+    await expect(
+      addContributingCause(firstCase.id, "Faktor lintas kasus", [
+        foreignEvidence.id,
+      ]),
+    ).rejects.toBeInstanceOf(InvalidEvidenceSelectionError);
+    await expect(
+      updateContributingCause(
+        firstCase.id,
+        cause.id,
+        "Faktor lintas kasus",
+        [foreignEvidence.id],
+      ),
+    ).rejects.toBeInstanceOf(InvalidEvidenceSelectionError);
+
+    await expect(
+      getPrisma().evidenceCauseLink.count({
+        where: { contributingCauseId: cause.id },
+      }),
+    ).resolves.toBe(0);
+    await expect(
+      getPrisma().contributingCause.count({
+        where: { qualityCaseId: firstCase.id },
+      }),
+    ).resolves.toBe(1);
+  });
+});

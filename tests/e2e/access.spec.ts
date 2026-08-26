@@ -123,7 +123,118 @@ test("Bukti dapat ditambah, diubah, dihapus, dan tahap dapat dikunjungi", async 
   await page.getByRole("button", { name: "Hapus Bukti" }).last().click();
   await expect(page.getByText("BUKTI 2", { exact: true })).toHaveCount(0);
   await page.getByRole("link", { name: "Faktor Penyebab" }).click();
-  await expect(page.getByText("Tahap ini adalah bagian dari alur investigasi")).toBeVisible();
+  await expect(page.getByRole("heading", { name: "Faktor Penyebab" }).first()).toBeVisible();
   await page.getByRole("link", { name: "Masalah & Konteks" }).click();
   await expect(page.getByText("Masalah & Konteks")).toBeVisible();
+});
+
+test("Evidence Loom menyimpan hubungan many-to-many dan tetap bermakna pada layar sempit", async ({ page }) => {
+  await signIn(page);
+  await page.getByRole("link", { name: "Buat Kasus Kualitas" }).first().click();
+  await page
+    .getByLabel("Masalah")
+    .fill(`Jahitan loncat Evidence Loom ${Date.now()}`);
+  await page.getByRole("button", { name: "Simpan Kasus Kualitas" }).click();
+  rememberCurrentCase(page);
+
+  await page.getByRole("link", { name: "Bukti" }).click();
+  await page.getByLabel("Bukti baru").fill("Defect terkonsentrasi pada M-04");
+  await page.getByRole("button", { name: "Tambah Bukti" }).click();
+  await expect(page.getByText("BUKTI 1", { exact: true })).toBeVisible();
+  await page.getByLabel("Bukti baru").fill("Jarum terlihat aus");
+  await page.getByRole("button", { name: "Tambah Bukti" }).click();
+  await expect(page.getByText("BUKTI 2", { exact: true })).toBeVisible();
+
+  await page.getByRole("link", { name: "Faktor Penyebab" }).click();
+  const newCauseForm = page
+    .getByLabel("Faktor Penyebab baru")
+    .locator("xpath=ancestor::form");
+  await newCauseForm
+    .getByLabel("Faktor Penyebab baru")
+    .fill("Kondisi mesin lokal mungkin berkontribusi");
+  await newCauseForm.getByRole("checkbox").nth(0).check();
+  await newCauseForm.getByRole("checkbox").nth(1).check();
+  await newCauseForm
+    .getByRole("button", { name: "Tambah Faktor Penyebab" })
+    .click();
+  await expect(page.getByText("C1", { exact: true })).toBeVisible();
+
+  const refreshedNewCauseForm = page
+    .getByLabel("Faktor Penyebab baru")
+    .locator("xpath=ancestor::form");
+  await refreshedNewCauseForm
+    .getByLabel("Faktor Penyebab baru")
+    .fill("Kondisi jarum mungkin berkontribusi");
+  await refreshedNewCauseForm.getByRole("checkbox").nth(1).check();
+  await refreshedNewCauseForm
+    .getByRole("button", { name: "Tambah Faktor Penyebab" })
+    .click();
+  await expect(page.getByText("C2", { exact: true })).toBeVisible();
+
+  await expect(
+    page
+      .getByLabel("Isi Faktor Penyebab C1")
+      .locator("xpath=ancestor::article"),
+  ).toContainText("Didukung oleh: E1, E2");
+  await expect(
+    page
+      .getByLabel("Isi Faktor Penyebab C2")
+      .locator("xpath=ancestor::article"),
+  ).toContainText("Didukung oleh: E2");
+
+  const connectors = page.getByTestId("evidence-loom-connectors");
+  await expect(connectors).toBeVisible();
+  await expect(connectors.locator("path")).toHaveCount(3);
+  await expect(connectors.locator('path[data-direct="true"]')).toHaveCount(0);
+
+  await page
+    .getByRole("button", { name: /^Periksa Bukti E2:/ })
+    .click();
+  await expect(connectors.locator('path[data-direct="true"]')).toHaveCount(2);
+  await expect(
+    page.getByRole("button", { name: /^Periksa Bukti E2:/ }),
+  ).toHaveAttribute("aria-pressed", "true");
+
+  const firstCauseForm = page
+    .getByLabel("Isi Faktor Penyebab C1")
+    .locator("xpath=ancestor::form");
+  await firstCauseForm
+    .getByLabel("Isi Faktor Penyebab C1")
+    .fill("Kondisi mesin M-04 perlu diperiksa");
+  await firstCauseForm.getByRole("checkbox").nth(1).uncheck();
+  await firstCauseForm
+    .getByRole("button", { name: "Simpan Faktor & Hubungan" })
+    .click();
+  await expect(
+    page.getByText("Faktor Penyebab dan hubungan Bukti telah diperbarui."),
+  ).toBeVisible();
+
+  await page.setViewportSize({ width: 390, height: 844 });
+  await expect(connectors).toBeHidden();
+  await expect(
+    page
+      .getByLabel("Isi Faktor Penyebab C1")
+      .locator("xpath=ancestor::article"),
+  ).toContainText("Didukung oleh: E1");
+
+  await page.getByRole("link", { name: "Bukti" }).click();
+  await expect(page.getByText("BUKTI 1", { exact: true })).toBeVisible();
+  await page.getByRole("link", { name: "Faktor Penyebab" }).click();
+  await expect(page.getByLabel("Isi Faktor Penyebab C1")).toHaveValue(
+    "Kondisi mesin M-04 perlu diperiksa",
+  );
+
+  const secondCauseCard = page
+    .getByLabel("Isi Faktor Penyebab C2")
+    .locator("xpath=ancestor::article");
+  await secondCauseCard
+    .getByRole("button", { name: "Hapus Faktor Penyebab" })
+    .click();
+  await expect(page.getByLabel("Isi Faktor Penyebab C2")).toHaveCount(0);
+
+  await page.reload();
+  await expect(page.getByLabel("Isi Faktor Penyebab C1")).toHaveValue(
+    "Kondisi mesin M-04 perlu diperiksa",
+  );
+  await expect(page.getByText("C2", { exact: true })).toHaveCount(0);
 });
