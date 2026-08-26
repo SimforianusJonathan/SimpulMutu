@@ -85,7 +85,7 @@ The current foundation uses:
 - Vitest and Playwright;
 - a Railway-compatible Node.js deployment shape.
 
-No Kasus Kualitas product model or creation workflow is included yet.
+Milestone 2 adds canonical Kasus Kualitas creation, active-case reopening, and active Masalah/konteks editing. Investigation reasoning, resolution, and retrieval remain deferred.
 
 ### Local prerequisites
 
@@ -107,6 +107,7 @@ Do not prefix these values with `NEXT_PUBLIC_`. They must remain server-only.
 ```bash
 npm install
 npm run prisma:validate
+npm exec prisma migrate deploy
 npm run db:check
 npm run dev
 ```
@@ -129,4 +130,4 @@ npm run test:e2e
 
 Create one Railway web service and one managed PostgreSQL service. Configure the three required server variables in the web service. `railway.toml` uses Railpack with the standalone Next.js build and checks `/api/health`, which returns generic availability only after both access configuration and PostgreSQL are ready.
 
-There are no Prisma migrations in Milestone 1 because no product table is required to prove connectivity.
+Railway must run the committed Prisma migration before serving Milestone 2 so the canonical `QualityCase` table exists.

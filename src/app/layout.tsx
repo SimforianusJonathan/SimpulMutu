@@ -4,7 +4,7 @@ import type { ReactNode } from "react";
 import "./globals.css";
 
 export const metadata: Metadata = {
-  title: "Memori Kualitas",
+  title: "Simpul Mutu",
   description: "Ruang investigasi kualitas untuk IKM konveksi.",
 };
 

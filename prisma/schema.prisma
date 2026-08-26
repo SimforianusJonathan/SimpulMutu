@@ -6,3 +6,23 @@ generator client {
 datasource db {
   provider = "postgresql"
 }
+
+enum QualityCaseStatus {
+  DRAFT
+}
+
+model QualityCase {
+  id                    String            @id @default(cuid())
+  status                QualityCaseStatus @default(DRAFT)
+  problem               String
+  productionStage       String?
+  productModelReference String?
+  material              String?
+  machineWorkstation    String?
+  batchOrderReference   String?
+  additionalContextNote String?
+  createdAt             DateTime          @default(now())
+  updatedAt             DateTime          @updatedAt
+
+  @@index([status, updatedAt])
+}
