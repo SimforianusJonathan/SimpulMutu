@@ -1,0 +1,29 @@
+@import "tailwindcss";
+
+:root {
+  color-scheme: light dark;
+  font-family:
+    "Segoe UI Variable Text",
+    "Segoe UI",
+    system-ui,
+    -apple-system,
+    sans-serif;
+  text-rendering: optimizeLegibility;
+}
+
+* {
+  box-sizing: border-box;
+}
+
+body {
+  margin: 0;
+}
+
+button,
+input {
+  font: inherit;
+}
+
+::selection {
+  background: rgb(4 120 87 / 24%);
+}
