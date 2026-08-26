@@ -1,0 +1,11 @@
+"use server";
+import { revalidatePath } from "next/cache";
+import { requireSession } from "@/lib/access/current-session";
+import { addEvidence, QualityCaseNotFoundError, removeEvidence, updateEvidence, validateEvidenceContent } from "@/lib/quality-case/service";
+export type EvidenceActionState = { error?: string; success?: string };
+const persistenceError = "Bukti belum tersimpan. Periksa koneksi lalu coba lagi.";
+function readContent(formData: FormData): string | null { const content = formData.get("content"); if (typeof content !== "string") return null; try { return validateEvidenceContent(content); } catch { return null; } }
+function failure(error: unknown): EvidenceActionState { return { error: error instanceof QualityCaseNotFoundError ? error.message : persistenceError }; }
+export async function addEvidenceAction(id: string, _state: EvidenceActionState, formData: FormData): Promise<EvidenceActionState> { await requireSession(); const content = readContent(formData); if (!content) return { error: "Bukti perlu diisi sebelum disimpan." }; try { await addEvidence(id, content); revalidatePath(`/kasus-kualitas/${id}`); return { success: "Bukti telah disimpan." }; } catch (error) { return failure(error); } }
+export async function updateEvidenceAction(id: string, evidenceId: string, _state: EvidenceActionState, formData: FormData): Promise<EvidenceActionState> { await requireSession(); const content = readContent(formData); if (!content) return { error: "Bukti perlu diisi sebelum disimpan." }; try { await updateEvidence(id, evidenceId, content); revalidatePath(`/kasus-kualitas/${id}`); return { success: "Bukti telah diperbarui." }; } catch (error) { return failure(error); } }
+export async function removeEvidenceAction(id: string, evidenceId: string, _state: EvidenceActionState, _formData: FormData): Promise<EvidenceActionState> { void _state; void _formData; await requireSession(); try { await removeEvidence(id, evidenceId); revalidatePath(`/kasus-kualitas/${id}`); return { success: "Bukti telah dihapus." }; } catch (error) { return failure(error); } }

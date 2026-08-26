@@ -104,3 +104,26 @@ test("keluar menghapus sesi aplikasi", async ({ page }) => {
   await page.goto("/");
   await expect(page).toHaveURL(/\/akses$/);
 });
+test("Bukti dapat ditambah, diubah, dihapus, dan tahap dapat dikunjungi", async ({ page }) => {
+  await signIn(page);
+  await page.getByRole("link", { name: "Buat Kasus Kualitas" }).first().click();
+  await page.getByLabel("Masalah").fill(`Kain bernoda ${Date.now()}`);
+  await page.getByRole("button", { name: "Simpan Kasus Kualitas" }).click();
+  rememberCurrentCase(page);
+  await page.getByRole("link", { name: "Bukti" }).click();
+  await page.getByLabel("Bukti baru").fill("Noda terlihat setelah pencucian");
+  await page.getByRole("button", { name: "Tambah Bukti" }).click();
+  await expect(page.getByText("BUKTI 1", { exact: true })).toBeVisible();
+  await page.getByLabel("Bukti baru").fill("Noda muncul pada tiga potong");
+  await page.getByRole("button", { name: "Tambah Bukti" }).click();
+  await expect(page.getByText("BUKTI 2", { exact: true })).toBeVisible();
+  await page.getByLabel("Isi Bukti 1").fill("Noda terlihat setelah pencucian awal");
+  await page.getByRole("button", { name: "Simpan perubahan" }).first().click();
+  await expect(page.getByText("Bukti telah diperbarui.", { exact: true })).toBeVisible();
+  await page.getByRole("button", { name: "Hapus Bukti" }).last().click();
+  await expect(page.getByText("BUKTI 2", { exact: true })).toHaveCount(0);
+  await page.getByRole("link", { name: "Faktor Penyebab" }).click();
+  await expect(page.getByText("Tahap ini adalah bagian dari alur investigasi")).toBeVisible();
+  await page.getByRole("link", { name: "Masalah & Konteks" }).click();
+  await expect(page.getByText("Masalah & Konteks")).toBeVisible();
+});

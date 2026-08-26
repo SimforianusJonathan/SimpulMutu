@@ -80,3 +80,25 @@ describe("persistensi Kasus Kualitas", () => {
     });
   });
 });
+describe("persistensi Bukti", () => {
+  it("menyimpan, memuat ulang, memperbarui, dan menghapus Bukti pada case aktif", async () => {
+    const { addEvidence, updateEvidence, removeEvidence } = await import("../../src/lib/quality-case/service");
+    const created = await createQualityCase({ problem: "Benang putus" }); createdIds.push(created.id);
+    const first = await addEvidence(created.id, "Benang putus pada mesin nomor 2");
+    const second = await addEvidence(created.id, "Terjadi pada 4 dari 10 potong");
+    await updateEvidence(created.id, first.id, "Benang putus pada mesin nomor 2 saat obras");
+    await removeEvidence(created.id, second.id);
+    await expect(getActiveQualityCase(created.id)).resolves.toMatchObject({ status: "INVESTIGATING", evidence: [{ id: first.id, content: "Benang putus pada mesin nomor 2 saat obras" }] });
+  });
+});
+describe("Bukti pada case nonaktif", () => {
+  it("menolak mutation ketika case sudah RESOLVED", async () => {
+    const { addEvidence, updateEvidence, removeEvidence } = await import("../../src/lib/quality-case/service");
+    const created = await createQualityCase({ problem: "Case selesai" }); createdIds.push(created.id);
+    const evidence = await addEvidence(created.id, "Bukti awal");
+    await getPrisma().qualityCase.update({ where: { id: created.id }, data: { status: "RESOLVED" } });
+    await expect(addEvidence(created.id, "Bukti lain")).rejects.toBeInstanceOf(Error);
+    await expect(updateEvidence(created.id, evidence.id, "Ubah")).rejects.toBeInstanceOf(Error);
+    await expect(removeEvidence(created.id, evidence.id)).rejects.toBeInstanceOf(Error);
+  });
+});

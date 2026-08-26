@@ -1,0 +1,19 @@
+"use client";
+
+import { useActionState } from "react";
+import type { Evidence } from "@/generated/prisma/client";
+import { addEvidenceAction, type EvidenceActionState, removeEvidenceAction, updateEvidenceAction } from "./evidence-actions";
+
+const initialState: EvidenceActionState = {};
+
+export function EvidencePanel({ caseId, evidence }: { caseId: string; evidence: Evidence[] }) {
+  const [state, formAction, pending] = useActionState(addEvidenceAction.bind(null, caseId), initialState);
+  return <section className="space-y-8"><div><h2 className="text-2xl font-semibold">Bukti</h2><p className="mt-2 max-w-2xl leading-7 text-slate-600 dark:text-slate-300">Catat observasi atau informasi yang diketahui. Bukti belum merupakan Faktor Penyebab atau kesimpulan.</p></div><form action={formAction} className="rounded-2xl border border-slate-200 bg-white p-5 dark:border-slate-800 dark:bg-slate-900"><label className="block text-sm font-semibold" htmlFor="new-evidence">Bukti baru</label><textarea className="mt-2 min-h-24 w-full rounded-xl border border-slate-300 bg-white px-4 py-3 text-slate-950 focus:outline-none focus:ring-4 focus:ring-emerald-700/15 dark:border-slate-700 dark:bg-slate-950 dark:text-slate-50" id="new-evidence" name="content" placeholder="Contoh: Benang pada jahitan sisi tampak longgar pada 8 dari 20 potong." required /><Feedback state={state} /><button className="mt-4 rounded-xl bg-emerald-800 px-4 py-2 font-semibold text-white disabled:opacity-70 dark:bg-emerald-500 dark:text-slate-950" disabled={pending} type="submit">{pending ? "Menyimpan..." : "Tambah Bukti"}</button></form><div className="space-y-4" aria-label="Daftar Bukti">{evidence.length === 0 ? <p className="border-t border-slate-200 pt-6 text-slate-600 dark:border-slate-800 dark:text-slate-300">Belum ada Bukti. Tambahkan observasi pertama yang sudah diketahui.</p> : evidence.map((item, index) => <EvidenceItem caseId={caseId} evidence={item} index={index + 1} key={item.id} />)}</div></section>;
+}
+
+function EvidenceItem({ caseId, evidence, index }: { caseId: string; evidence: Evidence; index: number }) {
+  const [state, formAction, pending] = useActionState(updateEvidenceAction.bind(null, caseId, evidence.id), initialState);
+  return <article className="rounded-2xl border border-slate-200 bg-white p-5 dark:border-slate-800 dark:bg-slate-900"><p className="text-sm font-semibold text-emerald-800 dark:text-emerald-300">BUKTI {index}</p><form action={formAction} className="mt-3"><label className="sr-only" htmlFor={`evidence-${evidence.id}`}>Isi Bukti {index}</label><textarea className="min-h-24 w-full rounded-xl border border-slate-300 bg-white px-4 py-3 text-slate-950 focus:outline-none focus:ring-4 focus:ring-emerald-700/15 dark:border-slate-700 dark:bg-slate-950 dark:text-slate-50" defaultValue={evidence.content} id={`evidence-${evidence.id}`} name="content" required /><Feedback state={state} /><div className="mt-4"><button className="rounded-xl border border-slate-300 px-4 py-2 font-semibold" disabled={pending} type="submit">Simpan perubahan</button></div></form><RemoveEvidenceForm caseId={caseId} evidenceId={evidence.id} /></article>;
+}
+function RemoveEvidenceForm({ caseId, evidenceId }: { caseId: string; evidenceId: string }) { const [state, action, pending] = useActionState(removeEvidenceAction.bind(null, caseId, evidenceId), initialState); return <form action={action} className="mt-3"><Feedback state={state} /><button className="rounded-xl px-4 py-2 font-semibold text-red-700" disabled={pending} type="submit">{pending ? "Menghapus..." : "Hapus Bukti"}</button></form>; }
+function Feedback({ state }: { state: EvidenceActionState }) { return <div aria-live="polite" className="min-h-5 pt-2">{state.error ? <p role="alert" className="text-sm text-red-700">{state.error}</p> : null}{state.success ? <p role="status" className="text-sm text-emerald-800">{state.success}</p> : null}</div>; }

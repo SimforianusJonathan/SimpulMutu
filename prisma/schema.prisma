@@ -9,6 +9,8 @@ datasource db {
 
 enum QualityCaseStatus {
   DRAFT
+  INVESTIGATING
+  RESOLVED
 }
 
 model QualityCase {
@@ -21,8 +23,20 @@ model QualityCase {
   machineWorkstation    String?
   batchOrderReference   String?
   additionalContextNote String?
+  evidence              Evidence[]
   createdAt             DateTime          @default(now())
   updatedAt             DateTime          @updatedAt
 
   @@index([status, updatedAt])
+}
+
+model Evidence {
+  id        String      @id @default(cuid())
+  qualityCaseId String
+  content   String
+  createdAt DateTime    @default(now())
+  updatedAt DateTime    @updatedAt
+  qualityCase QualityCase @relation(fields: [qualityCaseId], references: [id], onDelete: Cascade)
+
+  @@index([qualityCaseId, createdAt])
 }

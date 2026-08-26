@@ -1,0 +1,4 @@
+import { describe, expect, it } from "vitest";
+import { validateEvidenceContent } from "../../src/lib/quality-case/service";
+import { getStageCompleteness } from "../../src/lib/quality-case/stages";
+describe("Bukti dan tahap dasar", () => { it("menerima banyak Bukti yang terpisah", () => { expect([validateEvidenceContent("Observasi A"), validateEvidenceContent("Observasi B")]).toHaveLength(2); }); it("menolak Bukti kosong", () => { expect(() => validateEvidenceContent(" ")).toThrow("Bukti perlu diisi"); }); it("hanya menandai tahap yang telah tersedia", () => { expect(getStageCompleteness("Masalah", 2)).toEqual({ masalah: true, bukti: true, faktor: false, akar: false, tindakan: false, ringkasan: false }); }); });
