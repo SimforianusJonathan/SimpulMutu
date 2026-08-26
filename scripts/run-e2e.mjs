@@ -1,3 +1,4 @@
+import "dotenv/config";
 import { spawn, spawnSync } from "node:child_process";
 import { createServer } from "node:net";
 

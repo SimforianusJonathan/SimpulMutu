@@ -23,8 +23,10 @@ model QualityCase {
   machineWorkstation    String?
   batchOrderReference   String?
   additionalContextNote String?
+  workingRootCause      String?
   evidence              Evidence[]
   contributingCauses    ContributingCause[]
+  correctiveActions     CorrectiveAction[]
   createdAt             DateTime          @default(now())
   updatedAt             DateTime          @updatedAt
 
@@ -63,4 +65,15 @@ model EvidenceCauseLink {
 
   @@id([evidenceId, contributingCauseId])
   @@index([contributingCauseId])
+}
+
+model CorrectiveAction {
+  id            String      @id @default(cuid())
+  qualityCaseId String
+  content       String
+  createdAt     DateTime    @default(now())
+  updatedAt     DateTime    @updatedAt
+  qualityCase   QualityCase @relation(fields: [qualityCaseId], references: [id], onDelete: Cascade)
+
+  @@index([qualityCaseId, createdAt])
 }

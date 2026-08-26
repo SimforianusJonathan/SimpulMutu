@@ -277,3 +277,104 @@ describe("persistensi Faktor Penyebab dan hubungan Bukti", () => {
     ).resolves.toBe(1);
   });
 });
+
+
+describe("persistensi Dugaan Akar Penyebab dan Tindakan Korektif", () => {
+  it("menyimpan, memuat ulang, memperbarui, dan menghapus data aktif tanpa mengubah lifecycle", async () => {
+    const {
+      addCorrectiveAction,
+      addContributingCause,
+      addEvidence,
+      removeCorrectiveAction,
+      updateCorrectiveAction,
+      updateWorkingRootCause,
+    } = await import("../../src/lib/quality-case/service");
+    const created = await createQualityCase({
+      problem: "Jahitan loncat pada mesin M-04",
+      productionStage: "Obras",
+    });
+    createdIds.push(created.id);
+
+    const evidence = await addEvidence(
+      created.id,
+      "Defect terkonsentrasi pada mesin M-04",
+    );
+    const cause = await addContributingCause(
+      created.id,
+      "Tegangan benang mungkin tidak stabil",
+      [evidence.id],
+    );
+    await updateWorkingRootCause(
+      created.id,
+      "Tegangan benang pada mesin M-04 perlu distabilkan.",
+    );
+    const firstAction = await addCorrectiveAction(
+      created.id,
+      "Atur ulang tegangan benang pada mesin M-04.",
+    );
+    const secondAction = await addCorrectiveAction(
+      created.id,
+      "Catat parameter setelah pengaturan ulang.",
+    );
+    await updateCorrectiveAction(
+      created.id,
+      firstAction.id,
+      "Atur ulang dan catat tegangan benang pada mesin M-04.",
+    );
+    await removeCorrectiveAction(created.id, secondAction.id);
+
+    const reloaded = await getActiveQualityCase(created.id);
+    expect(reloaded).toMatchObject({
+      status: "INVESTIGATING",
+      workingRootCause: "Tegangan benang pada mesin M-04 perlu distabilkan.",
+      correctiveActions: [
+        {
+          id: firstAction.id,
+          content: "Atur ulang dan catat tegangan benang pada mesin M-04.",
+        },
+      ],
+    });
+    expect(
+      reloaded?.contributingCauses.find((item) => item.id === cause.id)
+        ?.evidenceLinks,
+    ).toEqual([{ evidenceId: evidence.id }]);
+  });
+
+  it("menolak mutation kesimpulan dan tindakan ketika case tidak aktif", async () => {
+    const {
+      addCorrectiveAction,
+      updateWorkingRootCause,
+    } = await import("../../src/lib/quality-case/service");
+    const created = await createQualityCase({ problem: "Case selesai" });
+    createdIds.push(created.id);
+
+    await getPrisma().qualityCase.update({
+      where: { id: created.id },
+      data: { status: "RESOLVED" },
+    });
+
+    await expect(
+      updateWorkingRootCause(created.id, "Kesimpulan tidak boleh tersimpan"),
+    ).rejects.toBeInstanceOf(Error);
+    await expect(
+      addCorrectiveAction(created.id, "Tindakan tidak boleh tersimpan"),
+    ).rejects.toBeInstanceOf(Error);
+  });
+
+  it("menyimpan kesimpulan dan tindakan pada case DRAFT tanpa memajukan lifecycle", async () => {
+    const { addCorrectiveAction, updateWorkingRootCause } = await import(
+      "../../src/lib/quality-case/service"
+    );
+    const created = await createQualityCase({ problem: "Masalah aktif" });
+    createdIds.push(created.id);
+
+    await updateWorkingRootCause(created.id, "Dugaan kerja awal.");
+    const action = await addCorrectiveAction(created.id, "Atur ulang parameter.");
+
+    await expect(getActiveQualityCase(created.id)).resolves.toMatchObject({
+      status: "DRAFT",
+      workingRootCause: "Dugaan kerja awal.",
+      correctiveActions: [{ id: action.id, content: "Atur ulang parameter." }],
+    });
+  });
+});

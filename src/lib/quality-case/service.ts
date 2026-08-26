@@ -17,6 +17,9 @@ const activeCaseInclude = {
     orderBy: { createdAt: "asc" as const },
     include: { evidenceLinks: { select: { evidenceId: true } } },
   },
+  correctiveActions: {
+    orderBy: { createdAt: "asc" as const },
+  },
 };
 
 export function initialQualityCaseStatus() {
@@ -37,16 +40,26 @@ export class InvalidEvidenceSelectionError extends Error {
   }
 }
 
-export function validateEvidenceContent(content: string) {
+function validateRequiredContent(content: string, label: string) {
   const normalized = content.trim();
-  if (!normalized) throw new Error("Bukti perlu diisi sebelum disimpan.");
+  if (!normalized) throw new Error(`${label} perlu diisi sebelum disimpan.`);
   return normalized;
 }
 
+export function validateEvidenceContent(content: string) {
+  return validateRequiredContent(content, "Bukti");
+}
+
 export function validateContributingCauseContent(content: string) {
-  const normalized = content.trim();
-  if (!normalized) throw new Error("Faktor Penyebab perlu diisi sebelum disimpan.");
-  return normalized;
+  return validateRequiredContent(content, "Faktor Penyebab");
+}
+
+export function validateWorkingRootCauseContent(content: string) {
+  return validateRequiredContent(content, "Dugaan Akar Penyebab");
+}
+
+export function validateCorrectiveActionContent(content: string) {
+  return validateRequiredContent(content, "Tindakan Korektif");
 }
 
 export function normalizeEvidenceIds(evidenceIds: readonly string[]) {
@@ -227,6 +240,62 @@ export async function removeContributingCause(qualityCaseId: string, causeId: st
     await lockActiveQualityCase(tx, qualityCaseId);
     const result = await tx.contributingCause.deleteMany({
       where: { id: causeId, qualityCaseId },
+    });
+    if (result.count !== 1) throw new QualityCaseNotFoundError();
+  });
+}
+
+export async function updateWorkingRootCause(
+  qualityCaseId: string,
+  content: string,
+) {
+  const normalized = validateWorkingRootCauseContent(content);
+
+  return getPrisma().$transaction(async (tx) => {
+    await lockActiveQualityCase(tx, qualityCaseId);
+    return tx.qualityCase.update({
+      where: { id: qualityCaseId },
+      data: { workingRootCause: normalized },
+    });
+  });
+}
+
+export async function addCorrectiveAction(qualityCaseId: string, content: string) {
+  const normalized = validateCorrectiveActionContent(content);
+
+  return getPrisma().$transaction(async (tx) => {
+    await lockActiveQualityCase(tx, qualityCaseId);
+    return tx.correctiveAction.create({
+      data: { qualityCaseId, content: normalized },
+    });
+  });
+}
+
+export async function updateCorrectiveAction(
+  qualityCaseId: string,
+  actionId: string,
+  content: string,
+) {
+  const normalized = validateCorrectiveActionContent(content);
+
+  return getPrisma().$transaction(async (tx) => {
+    await lockActiveQualityCase(tx, qualityCaseId);
+    const result = await tx.correctiveAction.updateMany({
+      where: { id: actionId, qualityCaseId },
+      data: { content: normalized },
+    });
+    if (result.count !== 1) throw new QualityCaseNotFoundError();
+  });
+}
+
+export async function removeCorrectiveAction(
+  qualityCaseId: string,
+  actionId: string,
+) {
+  return getPrisma().$transaction(async (tx) => {
+    await lockActiveQualityCase(tx, qualityCaseId);
+    const result = await tx.correctiveAction.deleteMany({
+      where: { id: actionId, qualityCaseId },
     });
     if (result.count !== 1) throw new QualityCaseNotFoundError();
   });

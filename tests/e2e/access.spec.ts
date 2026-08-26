@@ -238,3 +238,113 @@ test("Evidence Loom menyimpan hubungan many-to-many dan tetap bermakna pada laya
   );
   await expect(page.getByText("C2", { exact: true })).toHaveCount(0);
 });
+
+
+test("M2 lengkap menyimpan kesimpulan sementara, Tindakan Korektif, dan Ringkasan tanpa resolve", async ({ page }) => {
+  await signIn(page);
+  await page.getByRole("link", { name: "Buat Kasus Kualitas" }).first().click();
+  await page.getByLabel("Masalah").fill(`Jahitan loncat M2 lengkap ${Date.now()}`);
+  await page.getByLabel("Tahap Produksi / Proses").fill("Obras");
+  await page.getByRole("button", { name: "Simpan Kasus Kualitas" }).click();
+  rememberCurrentCase(page);
+
+  await page.getByRole("link", { name: "Bukti" }).click();
+  await page.getByLabel("Bukti baru").fill("Defect terkonsentrasi pada mesin M-04");
+  await page.getByRole("button", { name: "Tambah Bukti" }).click();
+
+  await page.getByRole("link", { name: "Faktor Penyebab" }).click();
+  const causeForm = page
+    .getByLabel("Faktor Penyebab baru")
+    .locator("xpath=ancestor::form");
+  await causeForm
+    .getByLabel("Faktor Penyebab baru")
+    .fill("Tegangan benang mungkin tidak stabil");
+  await causeForm.getByRole("checkbox").check();
+  await causeForm.getByRole("button", { name: "Tambah Faktor Penyebab" }).click();
+
+  await page.getByRole("link", { name: "Dugaan Akar Penyebab" }).click();
+  await page.getByLabel("Kesimpulan kerja saat ini").evaluate((element) => element.removeAttribute("required"));
+  await page.getByRole("button", { name: "Simpan Dugaan Akar Penyebab" }).click();
+  await expect(page.getByRole("alert")).toContainText("Dugaan Akar Penyebab perlu diisi");
+  await expect(page.getByRole("status")).toHaveCount(0);
+  await expect(
+    page.getByText("Kesimpulan sementara, bukan fakta terbukti."),
+  ).toBeVisible();
+  await page
+    .getByLabel("Kesimpulan kerja saat ini")
+    .fill("Tegangan benang pada mesin M-04 perlu distabilkan.");
+  await page
+    .getByRole("button", { name: "Simpan Dugaan Akar Penyebab" })
+    .click();
+  await expect(page.getByRole("status")).toContainText(
+    "kesimpulan sementara",
+  );
+  await page
+    .getByLabel("Kesimpulan kerja saat ini")
+    .fill("Tegangan benang M-04 perlu distabilkan dan dipantau.");
+  await page
+    .getByRole("button", { name: "Perbarui Dugaan Akar Penyebab" })
+    .click();
+
+  await page.getByRole("link", { name: "Ringkasan" }).click();
+  await expect(
+    page.getByRole("heading", { name: "Pemeriksaan kesiapan penyelesaian" }),
+  ).toBeVisible();
+  await expect(
+    page.getByText("Tindakan Korektif").last(),
+  ).toBeVisible();
+  await expect(page.getByText("Belum lengkap").last()).toBeVisible();
+
+  await page.getByRole("link", { name: "Tindakan Korektif" }).click();
+  await page.getByLabel("Tindakan Korektif baru").evaluate((element) => element.removeAttribute("required"));
+  await page.getByRole("button", { name: "Tambah Tindakan Korektif" }).click();
+  await expect(page.getByRole("alert")).toContainText("Tindakan Korektif perlu diisi");
+  await expect(page.getByRole("status")).toHaveCount(0);
+  await page
+    .getByLabel("Tindakan Korektif baru")
+    .fill("Atur ulang tegangan benang pada mesin M-04.");
+  await page
+    .getByRole("button", { name: "Tambah Tindakan Korektif" })
+    .click();
+  await expect(page.getByRole("status")).toContainText(
+    "Tindakan Korektif telah disimpan.",
+  );
+  await page
+    .getByLabel("Tindakan Korektif baru")
+    .fill("Catat parameter tegangan setelah pengaturan ulang.");
+  await page
+    .getByRole("button", { name: "Tambah Tindakan Korektif" })
+    .click();
+  await expect(page.getByRole("status")).toContainText(
+    "Tindakan Korektif telah disimpan.",
+  );
+  await expect(page.getByText("Tindakan 2", { exact: true })).toBeVisible();
+
+  await page
+    .getByLabel("Isi Tindakan Korektif 1")
+    .fill("Atur ulang dan catat tegangan benang pada mesin M-04.");
+  await page
+    .getByRole("button", { name: "Simpan Tindakan Korektif" })
+    .first()
+    .click();
+  await expect(page.getByText("Tindakan Korektif telah diperbarui.")).toBeVisible();
+  await page
+    .getByRole("button", { name: "Hapus Tindakan Korektif" })
+    .last()
+    .click();
+  await expect(page.getByText("Tindakan 2", { exact: true })).toHaveCount(0);
+
+  await page.getByRole("link", { name: "Ringkasan" }).click();
+  await expect(
+    page.getByText("Tegangan benang M-04 perlu distabilkan dan dipantau."),
+  ).toBeVisible();
+  await expect(
+    page.getByText("Atur ulang dan catat tegangan benang pada mesin M-04."),
+  ).toBeVisible();
+  await expect(page.getByText("Didukung oleh: E1")).toBeVisible();
+  await expect(page.getByText("Lengkap").last()).toBeVisible();
+  await expect(page.getByText("Kasus Kualitas tetap aktif.")).toBeVisible();
+  await expect(
+    page.getByRole("button", { name: /Selesaikan|Resolve/i }),
+  ).toHaveCount(0);
+});
