@@ -2,13 +2,14 @@ import { QualityCaseStatus, type Prisma } from "@/generated/prisma/client";
 
 import { getPrisma } from "@/lib/db/prisma";
 import { type QualityCaseInput, validateQualityCaseInput } from "./input";
+import { getResolutionReadiness } from "./stages";
 
 const activeStatuses: QualityCaseStatus[] = [
   QualityCaseStatus.DRAFT,
   QualityCaseStatus.INVESTIGATING,
 ];
 
-const activeCaseInclude = {
+const qualityCaseInclude = {
   evidence: {
     orderBy: { createdAt: "asc" as const },
     include: { causeLinks: { select: { contributingCauseId: true } } },
@@ -30,6 +31,13 @@ export class QualityCaseNotFoundError extends Error {
   constructor() {
     super("Kasus Kualitas tidak ditemukan atau tidak lagi aktif.");
     this.name = "QualityCaseNotFoundError";
+  }
+}
+
+export class QualityCaseResolutionError extends Error {
+  constructor(message: string) {
+    super(message);
+    this.name = "QualityCaseResolutionError";
   }
 }
 
@@ -88,10 +96,24 @@ export async function updateActiveQualityCase(id: string, input: QualityCaseInpu
   return getActiveQualityCase(id);
 }
 
+export async function getQualityCase(id: string) {
+  return getPrisma().qualityCase.findUnique({
+    where: { id },
+    include: qualityCaseInclude,
+  });
+}
+
+export async function listResolvedQualityCases() {
+  return getPrisma().qualityCase.findMany({
+    where: { status: QualityCaseStatus.RESOLVED },
+    orderBy: { updatedAt: "desc" },
+  });
+}
+
 export async function getActiveQualityCase(id: string) {
   return getPrisma().qualityCase.findFirst({
     where: { id, status: { in: activeStatuses } },
-    include: activeCaseInclude,
+    include: qualityCaseInclude,
   });
 }
 
@@ -120,41 +142,60 @@ export async function addEvidence(id: string, content: string) {
 
 export async function updateEvidence(id: string, evidenceId: string, content: string) {
   const normalized = validateEvidenceContent(content);
-  const result = await getPrisma().evidence.updateMany({
-    where: {
-      id: evidenceId,
-      qualityCaseId: id,
-      qualityCase: { status: { in: activeStatuses } },
-    },
-    data: { content: normalized },
+
+  return getPrisma().$transaction(async (tx) => {
+    await lockActiveQualityCase(tx, id);
+    const result = await tx.evidence.updateMany({
+      where: { id: evidenceId, qualityCaseId: id },
+      data: { content: normalized },
+    });
+    if (result.count !== 1) throw new QualityCaseNotFoundError();
   });
-  if (result.count !== 1) throw new QualityCaseNotFoundError();
 }
 
 export async function removeEvidence(id: string, evidenceId: string) {
-  const result = await getPrisma().evidence.deleteMany({
-    where: {
-      id: evidenceId,
-      qualityCaseId: id,
-      qualityCase: { status: { in: activeStatuses } },
-    },
+  return getPrisma().$transaction(async (tx) => {
+    await lockActiveQualityCase(tx, id);
+    const result = await tx.evidence.deleteMany({
+      where: { id: evidenceId, qualityCaseId: id },
+    });
+    if (result.count !== 1) throw new QualityCaseNotFoundError();
   });
-  if (result.count !== 1) throw new QualityCaseNotFoundError();
+}
+
+type LockedQualityCase = {
+  status: QualityCaseStatus;
+  problem: string;
+  workingRootCause: string | null;
+};
+
+async function lockQualityCase(
+  tx: Prisma.TransactionClient,
+  qualityCaseId: string,
+) {
+  const [qualityCase] = await tx.$queryRaw<LockedQualityCase[]>`
+    SELECT "status", "problem", "workingRootCause"
+    FROM "QualityCase"
+    WHERE "id" = ${qualityCaseId}
+    FOR UPDATE
+  `;
+  if (!qualityCase) {
+    throw new QualityCaseNotFoundError();
+  }
+
+  return qualityCase;
 }
 
 async function lockActiveQualityCase(
   tx: Prisma.TransactionClient,
   qualityCaseId: string,
 ) {
-  const [qualityCase] = await tx.$queryRaw<Array<{ status: QualityCaseStatus }>>`
-    SELECT "status"
-    FROM "QualityCase"
-    WHERE "id" = ${qualityCaseId}
-    FOR UPDATE
-  `;
-  if (!qualityCase || !activeStatuses.includes(qualityCase.status)) {
+  const qualityCase = await lockQualityCase(tx, qualityCaseId);
+  if (!activeStatuses.includes(qualityCase.status)) {
     throw new QualityCaseNotFoundError();
   }
+
+  return qualityCase;
 }
 
 async function assertEvidenceSelection(
@@ -298,5 +339,62 @@ export async function removeCorrectiveAction(
       where: { id: actionId, qualityCaseId },
     });
     if (result.count !== 1) throw new QualityCaseNotFoundError();
+  });
+}
+
+export async function resolveQualityCase(qualityCaseId: string) {
+  return getPrisma().$transaction(async (tx) => {
+    const qualityCase = await lockQualityCase(tx, qualityCaseId);
+
+    if (qualityCase.status === QualityCaseStatus.RESOLVED) {
+      throw new QualityCaseResolutionError(
+        "Kasus Kualitas ini sudah selesai dan bersifat baca-saja.",
+      );
+    }
+
+    if (qualityCase.status !== QualityCaseStatus.INVESTIGATING) {
+      throw new QualityCaseResolutionError(
+        "Kasus Kualitas perlu berada dalam investigasi sebelum diselesaikan.",
+      );
+    }
+
+    const [evidenceCount, contributingCauseCount, correctiveActionCount] =
+      await Promise.all([
+        tx.evidence.count({ where: { qualityCaseId } }),
+        tx.contributingCause.count({ where: { qualityCaseId } }),
+        tx.correctiveAction.count({ where: { qualityCaseId } }),
+      ]);
+    const readiness = getResolutionReadiness({
+      problem: qualityCase.problem,
+      evidenceCount,
+      contributingCauseEvidenceCounts: Array.from(
+        { length: contributingCauseCount },
+        () => 0,
+      ),
+      workingRootCause: qualityCase.workingRootCause,
+      correctiveActionCount,
+    });
+
+    if (!readiness.complete) {
+      const missing = readiness.requirements
+        .filter((requirement) => !requirement.complete)
+        .map((requirement) => requirement.label)
+        .join(", ");
+      throw new QualityCaseResolutionError(
+        `Kasus Kualitas belum dapat diselesaikan. Lengkapi: ${missing}.`,
+      );
+    }
+
+    const resolved = await tx.qualityCase.updateMany({
+      where: { id: qualityCaseId, status: QualityCaseStatus.INVESTIGATING },
+      data: { status: QualityCaseStatus.RESOLVED },
+    });
+    if (resolved.count !== 1) {
+      throw new QualityCaseResolutionError(
+        "Kasus Kualitas belum dapat diselesaikan. Coba lagi.",
+      );
+    }
+
+    return { id: qualityCaseId, status: QualityCaseStatus.RESOLVED };
   });
 }

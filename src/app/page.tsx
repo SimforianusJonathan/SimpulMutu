@@ -50,7 +50,7 @@ export default async function HomePage() {
             {qualityCases.map((qualityCase) => (
               <li key={qualityCase.id}>
                 <Link className="block rounded-2xl border border-slate-200 bg-white p-6 transition hover:border-emerald-700 focus-visible:outline-none focus-visible:ring-4 focus-visible:ring-emerald-700/20 dark:border-slate-800 dark:bg-slate-900" href={`/kasus-kualitas/${qualityCase.id}`}>
-                  <p className="text-sm font-semibold text-emerald-800 dark:text-emerald-300">DRAF · KASUS AKTIF</p>
+                  <p className="text-sm font-semibold text-emerald-800 dark:text-emerald-300">{qualityCase.status === "DRAFT" ? "DRAF" : "SEDANG DIINVESTIGASI"} · KASUS AKTIF</p>
                   <h2 className="mt-3 text-xl font-semibold">{qualityCase.problem}</h2>
                   <p className="mt-2 text-sm leading-6 text-slate-600 dark:text-slate-300">{qualityCase.productionStage ?? "Tahap Produksi / Proses belum diketahui"}</p>
                 </Link>

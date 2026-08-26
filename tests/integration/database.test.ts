@@ -3,7 +3,25 @@ import "dotenv/config";
 import { afterAll, afterEach, describe, expect, it } from "vitest";
 
 import { checkDatabaseConnection, disconnectDatabase, getPrisma } from "../../src/lib/db/prisma";
-import { createQualityCase, getActiveQualityCase, updateActiveQualityCase } from "../../src/lib/quality-case/service";
+import {
+  addCorrectiveAction,
+  addContributingCause,
+  addEvidence,
+  createQualityCase,
+  getActiveQualityCase,
+  getQualityCase,
+  listResolvedQualityCases,
+  QualityCaseResolutionError,
+  removeCorrectiveAction,
+  removeContributingCause,
+  removeEvidence,
+  resolveQualityCase,
+  updateActiveQualityCase,
+  updateContributingCause,
+  updateCorrectiveAction,
+  updateEvidence,
+  updateWorkingRootCause,
+} from "../../src/lib/quality-case/service";
 
 const createdIds: string[] = [];
 
@@ -276,6 +294,44 @@ describe("persistensi Faktor Penyebab dan hubungan Bukti", () => {
       }),
     ).resolves.toBe(1);
   });
+
+  it("membiarkan case aktif ketika persistensi RESOLVED gagal", async () => {
+    const qualityCase = await createResolutionCandidate();
+    const prisma = getPrisma();
+
+    await prisma.$executeRawUnsafe(`
+      CREATE OR REPLACE FUNCTION "reject_resolution_for_test"()
+      RETURNS trigger AS $$
+      BEGIN
+        RAISE EXCEPTION 'resolution persistence failure';
+      END;
+      $$ LANGUAGE plpgsql;
+    `);
+    await prisma.$executeRawUnsafe(`
+      CREATE TRIGGER "reject_resolution_for_test"
+      BEFORE UPDATE OF "status" ON "QualityCase"
+      FOR EACH ROW
+      WHEN (NEW."status" = 'RESOLVED')
+      EXECUTE FUNCTION "reject_resolution_for_test"();
+    `);
+
+    try {
+      await expect(resolveQualityCase(qualityCase.id)).rejects.toBeInstanceOf(
+        Error,
+      );
+      await expect(getQualityCase(qualityCase.id)).resolves.toMatchObject({
+        status: "INVESTIGATING",
+      });
+    } finally {
+      await prisma.$executeRawUnsafe(
+        'DROP TRIGGER IF EXISTS "reject_resolution_for_test" ON "QualityCase"',
+      );
+      await prisma.$executeRawUnsafe(
+        'DROP FUNCTION IF EXISTS "reject_resolution_for_test"()',
+      );
+    }
+  });
+
 });
 
 
@@ -376,5 +432,124 @@ describe("persistensi Dugaan Akar Penyebab dan Tindakan Korektif", () => {
       workingRootCause: "Dugaan kerja awal.",
       correctiveActions: [{ id: action.id, content: "Atur ulang parameter." }],
     });
+  });
+});
+type ResolutionCandidate = {
+  problem?: string;
+  evidence?: boolean;
+  cause?: boolean;
+  workingRootCause?: boolean;
+  correctiveAction?: boolean;
+};
+
+async function createResolutionCandidate({
+  problem = "Masalah untuk penyelesaian",
+  evidence = true,
+  cause = true,
+  workingRootCause = true,
+  correctiveAction = true,
+}: ResolutionCandidate = {}) {
+  const qualityCase = await getPrisma().qualityCase.create({
+    data: {
+      problem,
+      status: "INVESTIGATING",
+      workingRootCause: workingRootCause ? "Dugaan akar penyebab." : null,
+    },
+  });
+  createdIds.push(qualityCase.id);
+
+  if (evidence) {
+    await getPrisma().evidence.create({
+      data: { qualityCaseId: qualityCase.id, content: "Bukti investigasi." },
+    });
+  }
+  if (cause) {
+    await getPrisma().contributingCause.create({
+      data: { qualityCaseId: qualityCase.id, content: "Faktor penyebab." },
+    });
+  }
+  if (correctiveAction) {
+    await getPrisma().correctiveAction.create({
+      data: { qualityCaseId: qualityCase.id, content: "Tindakan korektif." },
+    });
+  }
+
+  return qualityCase;
+}
+
+describe("resolution Kasus Kualitas", () => {
+  it("menolak setiap invariant resolution dan membiarkan case tetap aktif", async () => {
+    const candidates = await Promise.all([
+      createResolutionCandidate({ problem: "  " }),
+      createResolutionCandidate({ evidence: false }),
+      createResolutionCandidate({ cause: false }),
+      createResolutionCandidate({ workingRootCause: false }),
+      createResolutionCandidate({ correctiveAction: false }),
+    ]);
+
+    for (const qualityCase of candidates) {
+      await expect(resolveQualityCase(qualityCase.id)).rejects.toBeInstanceOf(
+        QualityCaseResolutionError,
+      );
+      await expect(getQualityCase(qualityCase.id)).resolves.toMatchObject({
+        status: "INVESTIGATING",
+      });
+    }
+  });
+
+  it("menyelesaikan record canonical yang sama dan membuatnya eligible sebagai Memori Kualitas", async () => {
+    const qualityCase = await createResolutionCandidate();
+
+    await expect(resolveQualityCase(qualityCase.id)).resolves.toEqual({
+      id: qualityCase.id,
+      status: "RESOLVED",
+    });
+
+    await expect(getActiveQualityCase(qualityCase.id)).resolves.toBeNull();
+    await expect(getQualityCase(qualityCase.id)).resolves.toMatchObject({
+      id: qualityCase.id,
+      status: "RESOLVED",
+      evidence: [{ content: "Bukti investigasi." }],
+      contributingCauses: [{ content: "Faktor penyebab." }],
+      workingRootCause: "Dugaan akar penyebab.",
+      correctiveActions: [{ content: "Tindakan korektif." }],
+    });
+    await expect(
+      getPrisma().qualityCase.count({ where: { id: qualityCase.id } }),
+    ).resolves.toBe(1);
+    await expect(listResolvedQualityCases()).resolves.toEqual(
+      expect.arrayContaining([expect.objectContaining({ id: qualityCase.id })]),
+    );
+  });
+
+  it("menolak resolve ulang dan seluruh mutasi normal setelah RESOLVED", async () => {
+    const qualityCase = await createQualityCase({ problem: "Kasus immutable" });
+    createdIds.push(qualityCase.id);
+    const evidence = await addEvidence(qualityCase.id, "Bukti awal.");
+    const cause = await addContributingCause(
+      qualityCase.id,
+      "Faktor awal.",
+      [evidence.id],
+    );
+    await updateWorkingRootCause(qualityCase.id, "Dugaan awal.");
+    const action = await addCorrectiveAction(qualityCase.id, "Tindakan awal.");
+    await resolveQualityCase(qualityCase.id);
+
+    await expect(resolveQualityCase(qualityCase.id)).rejects.toBeInstanceOf(
+      QualityCaseResolutionError,
+    );
+    await expect(
+      updateActiveQualityCase(qualityCase.id, { problem: "Tidak boleh berubah" }),
+    ).rejects.toBeInstanceOf(Error);
+    await expect(addEvidence(qualityCase.id, "Tidak boleh ditambah")).rejects.toBeInstanceOf(Error);
+    await expect(updateEvidence(qualityCase.id, evidence.id, "Tidak boleh diubah")).rejects.toBeInstanceOf(Error);
+    await expect(removeEvidence(qualityCase.id, evidence.id)).rejects.toBeInstanceOf(Error);
+    await expect(addContributingCause(qualityCase.id, "Tidak boleh ditambah", [evidence.id])).rejects.toBeInstanceOf(Error);
+    await expect(updateContributingCause(qualityCase.id, cause.id, "Tidak boleh diubah", [evidence.id])).rejects.toBeInstanceOf(Error);
+    await expect(removeContributingCause(qualityCase.id, cause.id)).rejects.toBeInstanceOf(Error);
+    await expect(updateWorkingRootCause(qualityCase.id, "Tidak boleh diubah")).rejects.toBeInstanceOf(Error);
+    await expect(addCorrectiveAction(qualityCase.id, "Tidak boleh ditambah")).rejects.toBeInstanceOf(Error);
+    await expect(updateCorrectiveAction(qualityCase.id, action.id, "Tidak boleh diubah")).rejects.toBeInstanceOf(Error);
+    await expect(removeCorrectiveAction(qualityCase.id, action.id)).rejects.toBeInstanceOf(Error);
   });
 });

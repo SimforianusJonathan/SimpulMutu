@@ -1,4 +1,4 @@
-import "dotenv/config";
+// import "dotenv/config";
 
 import { expect, test } from "@playwright/test";
 
@@ -265,7 +265,7 @@ test("M2 lengkap menyimpan kesimpulan sementara, Tindakan Korektif, dan Ringkasa
   await page.getByRole("link", { name: "Dugaan Akar Penyebab" }).click();
   await page.getByLabel("Kesimpulan kerja saat ini").evaluate((element) => element.removeAttribute("required"));
   await page.getByRole("button", { name: "Simpan Dugaan Akar Penyebab" }).click();
-  await expect(page.getByRole("alert")).toContainText("Dugaan Akar Penyebab perlu diisi");
+  await expect(page.getByText("Dugaan Akar Penyebab perlu diisi sebelum disimpan.")).toBeVisible();
   await expect(page.getByRole("status")).toHaveCount(0);
   await expect(
     page.getByText("Kesimpulan sementara, bukan fakta terbukti."),
@@ -298,7 +298,7 @@ test("M2 lengkap menyimpan kesimpulan sementara, Tindakan Korektif, dan Ringkasa
   await page.getByRole("link", { name: "Tindakan Korektif" }).click();
   await page.getByLabel("Tindakan Korektif baru").evaluate((element) => element.removeAttribute("required"));
   await page.getByRole("button", { name: "Tambah Tindakan Korektif" }).click();
-  await expect(page.getByRole("alert")).toContainText("Tindakan Korektif perlu diisi");
+  await expect(page.getByText("Tindakan Korektif perlu diisi sebelum disimpan.")).toBeVisible();
   await expect(page.getByRole("status")).toHaveCount(0);
   await page
     .getByLabel("Tindakan Korektif baru")
@@ -344,7 +344,70 @@ test("M2 lengkap menyimpan kesimpulan sementara, Tindakan Korektif, dan Ringkasa
   await expect(page.getByText("Didukung oleh: E1")).toBeVisible();
   await expect(page.getByText("Lengkap").last()).toBeVisible();
   await expect(page.getByText("Kasus Kualitas tetap aktif.")).toBeVisible();
+  await expect(page.getByRole("button", { name: "Selesaikan Kasus" })).toBeVisible();
+});
+
+test("M3 hanya menyelesaikan case lengkap secara eksplisit lalu menampilkannya sebagai Memori Kualitas baca-saja", async ({ page }) => {
+  await signIn(page);
+  await page.getByRole("link", { name: "Buat Kasus Kualitas" }).first().click();
+  await page.getByLabel("Masalah").fill(`Kasus incomplete M3 ${Date.now()}`);
+  await page.getByRole("button", { name: "Simpan Kasus Kualitas" }).click();
+  rememberCurrentCase(page);
+  await page.getByRole("link", { name: "Ringkasan" }).click();
+  await expect(page.getByText("Belum lengkap").first()).toBeVisible();
+  await expect(page.getByRole("button", { name: "Selesaikan Kasus" })).toHaveCount(0);
+
+  await page.getByRole("link", { name: "Bukti" }).click();
+  await page.getByLabel("Bukti baru").fill("Benang terlepas pada mesin M-04.");
+  await page.getByRole("button", { name: "Tambah Bukti" }).click();
+
+  await page.getByRole("link", { name: "Faktor Penyebab" }).click();
+  const causeForm = page
+    .getByLabel("Faktor Penyebab baru")
+    .locator("xpath=ancestor::form");
+  await causeForm
+    .getByLabel("Faktor Penyebab baru")
+    .fill("Tegangan benang mungkin tidak stabil.");
+  await causeForm.getByRole("checkbox").check();
+  await causeForm.getByRole("button", { name: "Tambah Faktor Penyebab" }).click();
+
+  await page.getByRole("link", { name: "Dugaan Akar Penyebab" }).click();
+  await page
+    .getByLabel("Kesimpulan kerja saat ini")
+    .fill("Tegangan benang M-04 perlu distabilkan.");
+  await page
+    .getByRole("button", { name: "Simpan Dugaan Akar Penyebab" })
+    .click();
+
+  await page.getByRole("link", { name: "Tindakan Korektif" }).click();
+  await page
+    .getByLabel("Tindakan Korektif baru")
+    .fill("Atur ulang tegangan benang pada mesin M-04.");
+  await page
+    .getByRole("button", { name: "Tambah Tindakan Korektif" })
+    .click();
+
+  await page.getByRole("link", { name: "Ringkasan" }).click();
+  await expect(page.getByRole("button", { name: "Selesaikan Kasus" })).toBeVisible();
+  await page.getByRole("button", { name: "Selesaikan Kasus" }).click();
+
+  await expect(page.getByText("SELESAI / MEMORI KUALITAS")).toBeVisible();
+  await expect(page.getByText("Tegangan benang M-04 perlu distabilkan.")).toBeVisible();
   await expect(
-    page.getByRole("button", { name: /Selesaikan|Resolve/i }),
-  ).toHaveCount(0);
+    page.getByText("Atur ulang tegangan benang pada mesin M-04."),
+  ).toBeVisible();
+  await expect(page.getByRole("button", { name: "Simpan perubahan" })).toHaveCount(0);
+  await expect(page.getByRole("button", { name: "Tambah Bukti" })).toHaveCount(0);
+  await expect(page.getByRole("button", { name: "Tambah Faktor Penyebab" })).toHaveCount(0);
+  await expect(page.getByRole("button", { name: "Simpan Dugaan Akar Penyebab" })).toHaveCount(0);
+  await expect(page.getByRole("button", { name: "Tambah Tindakan Korektif" })).toHaveCount(0);
+  await expect(page.getByRole("link", { name: "Masalah & Konteks" })).toHaveCount(0);
+
+  const resolvedUrl = page.url();
+  const resolvedCaseId = new URL(resolvedUrl).pathname.split("/").at(-1);
+  await page.reload();
+  await expect(page).toHaveURL(resolvedUrl);
+  await expect(page.getByText("SELESAI / MEMORI KUALITAS")).toBeVisible();
+  await page.getByRole("link", { name: "Selesai", exact: true }).click();
+  await expect(page.locator(`a[href="/kasus-kualitas/${resolvedCaseId}"]`)).toBeVisible();
 });

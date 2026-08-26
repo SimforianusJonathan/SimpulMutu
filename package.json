@@ -16,6 +16,7 @@
     "test:integration": "vitest run tests/integration --maxWorkers=1",
     "test:e2e": "npm run build && node scripts/run-e2e.mjs",
     "db:check": "tsx scripts/check-database.ts",
+    "db:seed:synthetic": "tsx scripts/seed-synthetic-resolved-cases.ts",
     "prisma:generate": "prisma generate",
     "prisma:validate": "prisma validate",
     "postinstall": "prisma generate"

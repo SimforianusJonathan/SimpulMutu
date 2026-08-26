@@ -3,7 +3,7 @@ import { notFound } from "next/navigation";
 
 import { AppShell } from "@/app/components/app-shell";
 import { requireSession } from "@/lib/access/current-session";
-import { getActiveQualityCase } from "@/lib/quality-case/service";
+import { getQualityCase } from "@/lib/quality-case/service";
 import {
   getResolutionReadiness,
   getStageCompleteness,
@@ -14,6 +14,8 @@ import { QualityCaseForm } from "../case-form";
 import { EvidenceLoom } from "../evidence-loom";
 import { EvidencePanel } from "../evidence-panel";
 import { RootCausePanel } from "../root-cause-panel";
+import { ResolveCaseForm } from "../resolve-case-form";
+import { ResolvedQualityMemory } from "../resolved-quality-memory";
 
 const stages = [
   "Masalah & Konteks",
@@ -52,9 +54,17 @@ export default async function QualityCasePage({
 
   const { id } = await params;
   const { tahap } = await searchParams;
-  const qualityCase = await getActiveQualityCase(id);
+  const qualityCase = await getQualityCase(id);
   if (!qualityCase) notFound();
 
+
+  if (qualityCase.status === "RESOLVED") {
+    return (
+      <AppShell>
+        <ResolvedQualityMemory qualityCase={qualityCase} />
+      </AppShell>
+    );
+  }
   const stage = stageKeys.includes(tahap as Stage)
     ? (tahap as Stage)
     : "masalah";
@@ -192,6 +202,7 @@ export default async function QualityCasePage({
 
           {stage === "ringkasan" ? (
             <Summary
+               caseId={qualityCase.id}
               caseContext={qualityCase}
               causes={causes}
               evidence={qualityCase.evidence}
@@ -207,9 +218,11 @@ export default async function QualityCasePage({
 function Summary({
   caseContext,
   causes,
+  caseId,
   evidence,
   readiness,
 }: {
+  caseId: string;
   caseContext: {
     problem: string;
     productionStage: string | null;
@@ -375,6 +388,7 @@ function Summary({
               : "Lengkapi informasi yang masih belum tersedia. Kasus Kualitas tetap aktif."}
           </p>
         </SummarySection>
+          {readiness.complete ? <ResolveCaseForm caseId={caseId} /> : null}
       </div>
     </section>
   );
