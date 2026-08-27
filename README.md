@@ -73,7 +73,7 @@ Start with:
 
 A repo-local skill can be created later only if a repeated milestone workflow has proven stable and worth codifying.
 
-## Milestone 1 Runtime
+## MVP Runtime
 
 The current foundation uses:
 
@@ -85,7 +85,7 @@ The current foundation uses:
 - Vitest and Playwright;
 - a Railway-compatible Node.js deployment shape.
 
-Milestone 2 adds canonical Kasus Kualitas creation, active-case reopening, and active Masalah/konteks editing. Investigation reasoning, resolution, and retrieval remain deferred.
+The complete MVP supports one investigation-first learning loop: create a Kasus Kualitas, record Bukti and Faktor Penyebab with explicit relationships, record a provisional Dugaan Akar Penyebab and Tindakan Korektif, resolve the same case into read-only Memori Kualitas, and inspect relevant resolved cases as references.
 
 ### Local prerequisites
 
@@ -106,6 +106,7 @@ Do not prefix these values with `NEXT_PUBLIC_`. They must remain server-only.
 
 ```bash
 npm install
+npm run prisma:generate
 npm run prisma:validate
 npm exec prisma migrate deploy
 npm run db:check
@@ -113,6 +114,16 @@ npm run dev
 ```
 
 Open `http://localhost:3000`. Requests without a valid session are redirected to `/akses`.
+
+### Synthetic demo rehearsal
+
+The final demo dataset is marked internally as `SYNTHETIC`. Before a rehearsal, run:
+
+```bash
+npm run db:reset:golden-demo
+```
+
+This ensures QC-001, QC-002, and QC-003 are available as resolved historical fixtures and recreates only the marker-owned `SYNTHETIC - DEMO-CURRENT` case in its active investigation state. It does not alter normal application data.
 
 ### Verification
 
@@ -124,10 +135,10 @@ npm run test:integration
 npm run test:e2e
 ```
 
-`npm run test:e2e` builds the standalone production application first, runs its generated Node.js server, executes the Chromium access-gate scenarios, and stops the test server afterward.
+`npm run test:e2e` builds the standalone production application first, runs its generated Node.js server, verifies the access gate and the M1-M4 golden flow in Chromium, then stops the test server afterward.
 
 ### Railway
 
-Create one Railway web service and one managed PostgreSQL service. Configure the three required server variables in the web service. `railway.toml` uses Railpack with the standalone Next.js build and checks `/api/health`, which returns generic availability only after both access configuration and PostgreSQL are ready.
+Create one Railway web service and one managed PostgreSQL service. Configure the three required server variables in the web service. `railway.toml` uses Railpack, applies committed Prisma migrations before the standalone Next.js build, starts with `npm run start`, and checks `/api/health`, which returns generic availability only after both access configuration and PostgreSQL are ready.
 
-Railway must run the committed Prisma migration before serving Milestone 2 so the canonical `QualityCase` table exists.
+Run the synthetic demo reset only against a local/demo database; it is not part of the Railway startup command.
