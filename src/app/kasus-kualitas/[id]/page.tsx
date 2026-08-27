@@ -127,9 +127,9 @@ export default async function QualityCasePage({
 
         <nav
           aria-label="Tahap investigasi"
-          className="mt-10 overflow-x-auto border-y border-slate-200 py-4 dark:border-slate-800"
+          className="mt-10 overflow-x-auto rounded-2xl border border-slate-200 bg-white px-3 py-3 dark:border-slate-800 dark:bg-slate-900"
         >
-          <ol className="flex min-w-max items-center gap-3 text-sm font-semibold">
+          <ol className="flex min-w-max items-center gap-2 text-sm font-semibold">
             {stages.map((label, index) => {
               const key = stageKeys[index];
               const complete =
@@ -145,8 +145,10 @@ export default async function QualityCasePage({
                     aria-current={key === stage ? "step" : undefined}
                     className={
                       key === stage
-                        ? "rounded-lg bg-emerald-800 px-3 py-2 text-white focus-visible:outline-none focus-visible:ring-4 focus-visible:ring-emerald-700/25 dark:bg-emerald-500 dark:text-emerald-950"
-                        : "rounded-lg px-3 py-2 text-slate-700 hover:bg-slate-200 focus-visible:outline-none focus-visible:ring-4 focus-visible:ring-emerald-700/20 dark:text-slate-200 dark:hover:bg-slate-800"
+                        ? "rounded-xl bg-emerald-800 px-3 py-2 text-white shadow-sm focus-visible:outline-none focus-visible:ring-4 focus-visible:ring-emerald-700/25 dark:bg-emerald-500 dark:text-emerald-950"
+                        : complete
+                          ? "rounded-xl border border-emerald-800/25 bg-emerald-50 px-3 py-2 text-emerald-950 hover:bg-emerald-100 focus-visible:outline-none focus-visible:ring-4 focus-visible:ring-emerald-700/20 dark:border-emerald-300/30 dark:bg-emerald-950/35 dark:text-emerald-100 dark:hover:bg-emerald-950/55"
+                          : "rounded-xl px-3 py-2 text-slate-700 hover:bg-slate-100 focus-visible:outline-none focus-visible:ring-4 focus-visible:ring-emerald-700/20 dark:text-slate-200 dark:hover:bg-slate-800"
                     }
                     href={`/kasus-kualitas/${id}?tahap=${key}`}
                   >

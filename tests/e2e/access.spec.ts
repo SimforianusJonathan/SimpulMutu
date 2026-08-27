@@ -484,3 +484,78 @@ test("M4 menampilkan zero-result sebagai state valid", async ({ page }) => {
   await drawer.getByRole("button", { name: "Tutup" }).click();
   await expect(page.getByLabel("Masalah")).toHaveValue(/Noda tinta pada kain linen/);
 });
+
+
+test("golden demo M1-M4 menjaga investigasi aktif hingga menjadi Memori Kualitas", async ({ page }) => {
+  const problem = "Jahitan loncat pada sisi samping demo " + Date.now();
+
+  await signIn(page);
+  await page.getByRole("link", { name: "Buat Kasus Kualitas" }).first().click();
+  await page.getByLabel("Masalah").fill(problem);
+  await page.getByLabel("Tahap Produksi / Proses").fill("Penjahitan");
+  await page.getByLabel("Material").fill("Cotton 24s");
+  await page.getByLabel("Mesin / Workstation").fill("M-07");
+  await page.getByRole("button", { name: "Simpan Kasus Kualitas" }).click();
+  rememberCurrentCase(page);
+
+  await page.getByRole("link", { name: "Bukti" }).click();
+  await page.getByLabel("Bukti baru").fill("Defect terkonsentrasi pada hasil M-07.");
+  await page.getByRole("button", { name: "Tambah Bukti" }).click();
+  await page.getByLabel("Bukti baru").fill("Defect muncul setelah setting M-07 disesuaikan.");
+  await page.getByRole("button", { name: "Tambah Bukti" }).click();
+
+  await page.getByRole("link", { name: "Faktor Penyebab" }).click();
+  const firstCause = page.getByLabel("Faktor Penyebab baru").locator("xpath=ancestor::form");
+  await firstCause.getByLabel("Faktor Penyebab baru").fill("Faktor lokal workstation mungkin berkontribusi.");
+  await firstCause.getByRole("checkbox").nth(0).check();
+  await firstCause.getByRole("button", { name: "Tambah Faktor Penyebab" }).click();
+  await expect(page.getByText("C1", { exact: true })).toBeVisible();
+
+  const secondCause = page.getByLabel("Faktor Penyebab baru").locator("xpath=ancestor::form");
+  await secondCause.getByLabel("Faktor Penyebab baru").fill("Penyesuaian setting mungkin berkontribusi.");
+  await secondCause.getByRole("checkbox").nth(1).check();
+  await secondCause.getByRole("button", { name: "Tambah Faktor Penyebab" }).click();
+  await expect(page.getByTestId("evidence-loom-connectors")).toBeVisible();
+
+  await page.setViewportSize({ width: 390, height: 844 });
+  await expect(page.getByTestId("evidence-loom-connectors")).toBeHidden();
+  await expect(
+    page.getByLabel("Isi Faktor Penyebab C1").locator("xpath=ancestor::article"),
+  ).toContainText("Didukung oleh: E1");
+  await page.setViewportSize({ width: 1280, height: 900 });
+
+  await page.getByRole("button", { name: "Kasus Terdahulu yang Relevan" }).click();
+  const drawer = page.getByRole("dialog");
+  await expect(drawer).toContainText("SELESAI / MEMORI KUALITAS TERDAHULU");
+  await expect(drawer).toContainText("Relevan karena:");
+  await drawer.getByRole("button", { name: "Lihat Memori Kualitas" }).first().click();
+  await expect(drawer).toContainText("MEMORI KUALITAS TERDAHULU / BACA-SAJA");
+  await expect(drawer).toContainText("Dugaan Akar Penyebab pada kasus terdahulu");
+  await expect(drawer).toContainText("Tindakan Korektif pada kasus terdahulu");
+  await drawer.getByRole("button", { name: "Kembali ke referensi" }).click();
+  await drawer.getByRole("button", { name: "Tutup" }).click();
+
+  await page.getByRole("link", { name: "Dugaan Akar Penyebab" }).click();
+  await expect(page.getByLabel("Kesimpulan kerja saat ini")).toHaveValue("");
+  await page.getByLabel("Kesimpulan kerja saat ini").fill(
+    "Penyesuaian setting M-07 menjadi dugaan akar penyebab saat ini.",
+  );
+  await page.getByRole("button", { name: "Simpan Dugaan Akar Penyebab" }).click();
+
+  await page.getByRole("link", { name: "Tindakan Korektif" }).click();
+  await page.getByLabel("Tindakan Korektif baru").fill(
+    "Periksa dan kembalikan setting M-07 sebelum produksi dilanjutkan.",
+  );
+  await page.getByRole("button", { name: "Tambah Tindakan Korektif" }).click();
+
+  await page.getByRole("link", { name: "Ringkasan" }).click();
+  await expect(page.getByText("Didukung oleh: E1")).toBeVisible();
+  await expect(page.getByText("Didukung oleh: E2")).toBeVisible();
+  await page.getByRole("button", { name: "Selesaikan Kasus" }).click();
+
+  await expect(page.getByText("SELESAI / MEMORI KUALITAS")).toBeVisible();
+  await expect(page.getByText("BACA-SAJA / TIDAK DAPAT DIUBAH")).toBeVisible();
+  await expect(page.getByText("Faktor Penyebab dan hubungan Bukti")).toBeVisible();
+  await expect(page.getByRole("button", { name: "Tambah Bukti" })).toHaveCount(0);
+  await expect(page.getByRole("button", { name: "Simpan perubahan" })).toHaveCount(0);
+});

@@ -17,6 +17,8 @@
     "test:e2e": "npm run build && node scripts/run-e2e.mjs",
     "db:check": "tsx scripts/check-database.ts",
     "db:seed:demo-current": "tsx scripts/seed-synthetic-demo-current.ts",
+    "db:seed:golden-demo": "npm run db:seed:synthetic && npm run db:seed:demo-current",
+    "db:reset:golden-demo": "npm run db:seed:synthetic && tsx scripts/seed-synthetic-demo-current.ts --reset",
     "db:seed:synthetic": "tsx scripts/seed-synthetic-resolved-cases.ts",
     "prisma:generate": "prisma generate",
     "prisma:validate": "prisma validate",

@@ -183,7 +183,7 @@ export function EvidenceLoom({
               Bukti
             </h3>
             <span className="text-sm text-slate-500 dark:text-slate-400">
-              {evidence.length} item
+              {evidence.length} Bukti
             </span>
           </div>
           <div className="space-y-3">
@@ -240,7 +240,7 @@ export function EvidenceLoom({
               Faktor Penyebab
             </h3>
             <span className="text-sm text-slate-500 dark:text-slate-400">
-              {causes.length} item
+              {causes.length} Faktor
             </span>
           </div>
           <div className="space-y-4">

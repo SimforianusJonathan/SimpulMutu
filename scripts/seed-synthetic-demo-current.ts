@@ -10,6 +10,8 @@ import {
 } from "@/lib/quality-case/service";
 import { syntheticActiveQualityCaseFixture } from "@/lib/quality-case/synthetic-active-fixture";
 
+const reset = process.argv.includes("--reset");
+
 try {
   const existing = await getPrisma().qualityCase.findFirst({
     where: {
@@ -17,7 +19,14 @@ try {
     },
     select: { id: true, status: true },
   });
-  if (existing) {
+  if (existing && reset) {
+    await getPrisma().qualityCase.delete({ where: { id: existing.id } });
+    console.info(
+      `Mengatur ulang ${syntheticActiveQualityCaseFixture.label}; fixture sintetis lama (${existing.status}) dihapus.`,
+    );
+  }
+
+  if (existing && !reset) {
     console.info(
       `Melewati ${syntheticActiveQualityCaseFixture.label}; kasus sintetis sudah ada (${existing.status}).`,
     );
