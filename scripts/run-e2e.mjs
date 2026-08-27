@@ -25,6 +25,24 @@ async function assertPortIsAvailable() {
   });
 }
 
+function seedSyntheticM4Fixtures() {
+  const seed = spawnSync(
+    process.execPath,
+    [
+      "node_modules/tsx/dist/cli.mjs",
+      "scripts/seed-synthetic-resolved-cases.ts",
+    ],
+    {
+      env: testEnvironment,
+      stdio: "inherit",
+      windowsHide: true,
+    },
+  );
+  if (seed.status !== 0) {
+    throw new Error("Fixture sintetis M4 tidak dapat disiapkan untuk E2E.");
+  }
+}
+
 async function waitForServer() {
   const deadline = Date.now() + 30_000;
 
@@ -76,6 +94,7 @@ async function stopServer() {
 
 try {
   await assertPortIsAvailable();
+  seedSyntheticM4Fixtures();
 
   server = spawn(
     process.execPath,

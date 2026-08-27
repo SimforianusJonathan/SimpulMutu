@@ -14,11 +14,9 @@ import {
   type SyntheticResolvedQualityCaseFixture,
 } from "@/lib/quality-case/synthetic-resolved-fixtures";
 
-async function seedFixture(
-  fixture: SyntheticResolvedQualityCaseFixture,
-) {
+async function seedFixture(fixture: SyntheticResolvedQualityCaseFixture) {
   const existing = await getPrisma().qualityCase.findFirst({
-    where: { additionalContextNote: fixture.label },
+    where: { additionalContextNote: fixture.fixtureMarker },
     select: { id: true, status: true },
   });
   if (existing) {
@@ -33,7 +31,7 @@ async function seedFixture(
     material: fixture.material,
     machineWorkstation: fixture.machineWorkstation,
     batchOrderReference: fixture.batchOrderReference,
-    additionalContextNote: fixture.label,
+    additionalContextNote: fixture.fixtureMarker,
   });
   const evidence: { id: string }[] = [];
   for (const content of fixture.evidence) {

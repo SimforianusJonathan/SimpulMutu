@@ -411,3 +411,76 @@ test("M3 hanya menyelesaikan case lengkap secara eksplisit lalu menampilkannya s
   await page.getByRole("link", { name: "Selesai", exact: true }).click();
   await expect(page.locator(`a[href="/kasus-kualitas/${resolvedCaseId}"]`)).toBeVisible();
 });
+
+test("M4 membuka referensi historis tanpa mengubah penalaran Kasus Kualitas saat ini", async ({ page }) => {
+  const currentRootCause = "Setting M-07 perlu diperiksa sebagai dugaan saat ini.";
+  const currentAction = "Kembalikan setting M-07 sebelum produksi dilanjutkan.";
+
+  await signIn(page);
+  await page.getByRole("link", { name: "Buat Kasus Kualitas" }).first().click();
+  await page
+    .getByLabel("Masalah")
+    .fill(`Jahitan loncat kembali muncul pada sisi samping produk ${Date.now()}`);
+  await page.getByLabel("Tahap Produksi / Proses").fill("Penjahitan");
+  await page.getByLabel("Material").fill("Cotton 24s");
+  await page.getByLabel("Mesin / Workstation").fill("M-07");
+  await page.getByRole("button", { name: "Simpan Kasus Kualitas" }).click();
+  rememberCurrentCase(page);
+
+  await page.getByRole("link", { name: "Dugaan Akar Penyebab" }).click();
+  await page.getByLabel("Kesimpulan kerja saat ini").fill(currentRootCause);
+  await page
+    .getByRole("button", { name: "Simpan Dugaan Akar Penyebab" })
+    .click();
+  await page.getByRole("link", { name: "Tindakan Korektif" }).click();
+  await page.getByLabel("Tindakan Korektif baru").fill(currentAction);
+  await page
+    .getByRole("button", { name: "Tambah Tindakan Korektif" })
+    .click();
+
+  await page
+    .getByRole("button", { name: "Kasus Terdahulu yang Relevan" })
+    .click();
+  const drawer = page.getByRole("dialog");
+  await expect(drawer).toContainText("Jahitan loncat pada sisi samping beberapa produk.");
+  await expect(drawer).toContainText(
+    "Jahitan tidak stabil setelah penyesuaian mesin pada proses penjahitan.",
+  );
+  await expect(drawer.getByText("Relevan karena:").first()).toBeVisible();
+  await expect(drawer.getByText("Tahap produksi sama").first()).toBeVisible();
+  await drawer.getByRole("button", { name: "Lihat Memori Kualitas" }).first().click();
+  await expect(drawer).toContainText("MEMORI KUALITAS TERDAHULU / BACA-SAJA");
+  await expect(drawer).toContainText("Dugaan Akar Penyebab pada kasus terdahulu");
+  await expect(drawer).toContainText("Konteks pada kasus terdahulu");
+  await expect(drawer).toContainText("Mesin / Workstation");
+  await expect(drawer).toContainText("M-04");
+  await expect(drawer).toContainText("Didukung oleh: Bukti 3");
+  await expect(drawer).toContainText("bukan jawaban otomatis");
+  await drawer.getByRole("button", { name: "Kembali ke referensi" }).click();
+  await drawer.getByRole("button", { name: "Tutup" }).click();
+
+  await expect(page.getByRole("dialog")).toHaveCount(0);
+  await page.getByRole("link", { name: "Dugaan Akar Penyebab" }).click();
+  await expect(page.getByLabel("Kesimpulan kerja saat ini")).toHaveValue(currentRootCause);
+  await page.getByRole("link", { name: "Tindakan Korektif" }).click();
+  await expect(page.getByLabel("Isi Tindakan Korektif 1")).toHaveValue(currentAction);
+});
+
+test("M4 menampilkan zero-result sebagai state valid", async ({ page }) => {
+  await signIn(page);
+  await page.getByRole("link", { name: "Buat Kasus Kualitas" }).first().click();
+  await page.getByLabel("Masalah").fill(`Noda tinta pada kain linen ${Date.now()}`);
+  await page.getByLabel("Tahap Produksi / Proses").fill("Pemeriksaan akhir");
+  await page.getByLabel("Material").fill("Linen");
+  await page.getByRole("button", { name: "Simpan Kasus Kualitas" }).click();
+  rememberCurrentCase(page);
+
+  await page
+    .getByRole("button", { name: "Kasus Terdahulu yang Relevan" })
+    .click();
+  const drawer = page.getByRole("dialog");
+  await expect(drawer).toContainText("Belum ada Kasus Terdahulu yang Relevan");
+  await expect(drawer).toContainText("tetap dapat melanjutkan investigasi saat ini");
+  await drawer.getByRole("button", { name: "Tutup" }).click();
+  await expect(page.getByLabel("Masalah")).toHaveValue(/Noda tinta pada kain linen/);
+});

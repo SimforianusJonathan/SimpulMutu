@@ -1,8 +1,10 @@
 import Link from "next/link";
 import { notFound } from "next/navigation";
+import { Suspense } from "react";
 
 import { AppShell } from "@/app/components/app-shell";
 import { requireSession } from "@/lib/access/current-session";
+import { loadRelevantPastCaseReferences } from "@/lib/relevant-past-cases/service";
 import { getQualityCase } from "@/lib/quality-case/service";
 import {
   getResolutionReadiness,
@@ -14,6 +16,7 @@ import { QualityCaseForm } from "../case-form";
 import { EvidenceLoom } from "../evidence-loom";
 import { EvidencePanel } from "../evidence-panel";
 import { RootCausePanel } from "../root-cause-panel";
+import { RelevantPastCasesDrawer } from "../relevant-past-cases-drawer";
 import { ResolveCaseForm } from "../resolve-case-form";
 import { ResolvedQualityMemory } from "../resolved-quality-memory";
 
@@ -109,10 +112,15 @@ export default async function QualityCasePage({
           Kembali ke Kasus Kualitas aktif
         </Link>
 
-        <p className="mt-8 text-sm font-semibold text-emerald-800 dark:text-emerald-300">
-          {qualityCase.status === "DRAFT" ? "DRAF" : "SEDANG DIINVESTIGASI"}{" \u00b7 "}
-          KASUS KUALITAS AKTIF
-        </p>
+        <div className="mt-8 flex flex-wrap items-center justify-between gap-4">
+          <p className="text-sm font-semibold text-emerald-800 dark:text-emerald-300">
+            {qualityCase.status === "DRAFT" ? "DRAF" : "SEDANG DIINVESTIGASI"}{" \u00b7 "}
+            KASUS KUALITAS AKTIF
+          </p>
+          <Suspense fallback={<RelevantPastCasesLoading />}>
+            <RelevantPastCases qualityCaseId={qualityCase.id} />
+          </Suspense>
+        </div>
         <h1 className="mt-3 max-w-4xl text-3xl font-semibold tracking-tight sm:text-4xl">
           {qualityCase.problem}
         </h1>
@@ -212,6 +220,22 @@ export default async function QualityCasePage({
         </div>
       </section>
     </AppShell>
+  );
+}
+
+async function RelevantPastCases({ qualityCaseId }: { qualityCaseId: string }) {
+  const references = await loadRelevantPastCaseReferences(qualityCaseId);
+  return <RelevantPastCasesDrawer {...references} />;
+}
+
+function RelevantPastCasesLoading() {
+  return (
+    <p
+      aria-live="polite"
+      className="text-sm font-medium text-slate-600 dark:text-slate-300"
+    >
+      Mencari Kasus Terdahulu yang Relevan...
+    </p>
   );
 }
 
